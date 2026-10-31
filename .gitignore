@@ -1,0 +1,4 @@
+out/
+*.keystore
+assets/index.html
+javac.*.args

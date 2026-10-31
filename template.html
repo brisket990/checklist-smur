@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Check-list SMUR</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+/*STYLE*/
+<style>
+html{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+.menu{display:flex;flex-direction:column;gap:14px;padding-top:8px}
+.pick{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 18px;color:var(--fg);font-family:var(--body)}
+.pick b{font:700 26px/1.1 var(--display)}
+.pick span{color:var(--muted);font-size:15px}
+.pick:active{border-color:var(--accent)}
+.pick[disabled]{opacity:.5;cursor:default}
+.back{align-self:flex-start;background:none;border:0;color:var(--accent);font:600 15px var(--body);padding:4px 0;cursor:pointer}
+</style>
+</head><body>
+<div class="wrap" id="menu">
+  <header>
+    <span class="tag">SMUR Beaujon · prise de poste</span>
+    <h1>Quelle check-list ?</h1>
+    <p>Choisis le véhicule. La saisie ouvre ensuite le formulaire pré-rempli dans Chrome.</p>
+  </header>
+  <div class="menu" id="picks"></div>
+</div>
+
+<div id="app" hidden>
+  <div class="wrap">
+    <button class="back" id="backBtn" type="button">‹ Changer de check-list</button>
+    <header>
+      <span class="tag" id="tag"></span>
+      <h1 id="title"></h1>
+      <p>Saisis les relevés, signale les écarts. Tout le reste est coché conforme. Le bouton ouvre le formulaire pré-rempli : il ne reste qu'à faire Suivant jusqu'à Envoyer.</p>
+    </header>
+    <section class="card" id="quick"><h2>Relevés du jour</h2><div id="quickFields" style="display:flex;flex-direction:column;gap:14px"></div></section>
+    <div id="sections" style="display:flex;flex-direction:column;gap:14px"></div>
+    <section class="card">
+      <h2>Clôture</h2>
+      <div class="field" id="obs-field"><label for="obs">Observations diverses <small>(facultatif)</small></label><textarea id="obs"></textarea></div>
+      <div class="item" id="nc-item"><span class="lbl">Non-conformité empêchant la mise en service ?</span><div class="chips" id="nc"></div></div>
+      <div class="hint" id="nc-hint" hidden>Prévenir le cadre ou l'encadrant d'astreinte immédiatement.</div>
+      <button class="reset" id="reset" type="button">Tout remettre à conforme</button>
+    </section>
+  </div>
+  <div class="bar"><div class="in">
+    <a class="go" id="go" href="#" aria-disabled="true">Ouvrir le formulaire pré-rempli</a>
+    <p id="msg"></p>
+  </div></div>
+</div>
+
+<script>
+const OK2=["Pas d'anomalie","Dommages  constatés"], ON=["Oui","Non"], FCD=["Fonctionne correctement","Dysfonctionnement constaté"], FC=["Fonctionnement correct","Dysfonctionnement constaté"];
+const g=(q,opts,rows)=>({q,opts,rows}), s=(id,label,opts)=>({q:null,opts,rows:[[id,label]]});
+/*SECTIONS*/
+
+/* Quick fields: type text/num/select/chips; def = default value; req = required for sending */
+const FORMS={
+  umh:{
+    label:"UMH", sub:"Ambulance de réanimation", tag:"SMUR Beaujon · UMH", title:"Check-list ARS",
+    url:"https://docs.google.com/forms/d/e/1FAIpQLSeybrWXu5G6ExLghtE4ke0AKARzcojji_mBIo7-BudACzHAKg/viewform?usp=pp_url",
+    quick:[
+      {k:"aph",id:1909948002,label:"Numéro APH",type:"text",req:1,remember:1,half:1},
+      {k:"umh",id:1068065150,label:"N° AP de l'UMH",type:"select",opts:["4048","4026","4011"],req:1,remember:1,half:1},
+      {k:"amb",id:930596245,label:"Ambulance",type:"chips",opts:["BJN 02","BJN 03","BJN 04"],req:1,remember:1},
+      {k:"km",id:1377107286,label:"Kilométrage",type:"num",req:1,half:1},
+      {k:"o2",id:784180295,label:"Oxygène",unit:"L",type:"num",req:1,half:1},
+      {k:"n2o",id:3464408,label:"Entonox",unit:"L, facultatif",type:"num"},
+      {k:"fuel",id:1430786499,label:"Niveau de carburant",type:"chips",opts:["4/4","3/4","1/2","1/4","Réserve"],req:1},
+      {k:"adblue",id:46293276,label:"AdBlue demandé",type:"chips",opts:["non","oui"],def:"non",half:1},
+      {k:"dasri",id:2131243393,label:"DASRI",type:"chips",opts:["Vide","Plein"],def:"Vide",half:1}
+    ],
+    obs:380985160, nc:2139741352,
+    sections:SECTIONS_UMH
+  },
+  vl:{
+    label:"VL", sub:"VRIM", tag:"SMUR Beaujon · VL", title:"Check-list VRIM",
+    url:"https://docs.google.com/forms/d/e/1FAIpQLSeKzzSveeEjKHS_H49fJ4UvFF7pxT26l1idTVEzxziPkvnLnA/viewform?usp=pp_url",
+    quick:[
+      {k:"aph",id:1909948002,label:"Numéro APH",type:"text",req:1,remember:1,half:1},
+      {k:"umh",id:1068065150,label:"N° AP de l'UMH",type:"select",opts:["2301","2502","3355","3354"],req:1,remember:1,half:1},
+      {k:"amb",id:930596245,label:"Affectation",type:"chips",opts:["BJN 01"],def:"BJN 01",req:1},
+      {k:"km",id:1377107286,label:"Kilométrage",type:"num",req:1,half:1},
+      {k:"o2",id:601129564,label:"Oxygène",unit:"L",type:"num",req:1,half:1},
+      {k:"n2o",id:155163788,label:"Entonox",unit:"L",type:"num",req:1},
+      {k:"fuel",id:1430786499,label:"Niveau de carburant",type:"chips",opts:["4/4","3/4","1/2","1/4","Réserve"],req:1}
+    ],
+    obs:380985160, nc:2132470082, ncOpts:["Non","Oui *"],
+    sections:SECTIONS_VL
+  }
+};
+
+const $=id=>document.getElementById(id);
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const esc=v=>String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+let F=null, FK=null;
+
+function chips(el,name,opts,def){
+  el.innerHTML=opts.map(o=>`<label><input type="radio" name="${name}" value="${esc(o)}"${o===def?" checked":""}><span>${esc(o.replace(/\s+/g," ").trim())}</span></label>`).join("");
+}
+const val=name=>{const c=document.querySelector(`input[name="${CSS.escape(name)}"]:checked`);return c?c.value:""};
+const qv=q=>q.type==="chips"?val("q_"+q.k):($("q_"+q.k).value||"").trim();
+
+/* menu */
+$("picks").innerHTML=Object.entries({umh:{label:"UMH",sub:"Ambulance de réanimation (BJN 02, 03, 04)"},vl:{label:"VL",sub:"Véhicule léger (VRIM, BJN 01)"}})
+  .map(([k,m])=>`<button class="pick" type="button" data-k="${k}"${FORMS[k]?"":" disabled"}><b>${m.label}</b><span>${FORMS[k]?m.sub:m.sub+" · bientôt disponible"}</span></button>`).join("");
+$("picks").addEventListener("click",e=>{const b=e.target.closest(".pick");if(b&&!b.disabled)open(b.dataset.k)});
+$("backBtn").addEventListener("click",()=>goBack());
+window.goBack=function(){if($("app").hidden)return false;$("app").hidden=true;$("menu").hidden=false;window.scrollTo(0,0);return true};
+
+function open(k){
+  F=FORMS[k]; FK=k;
+  $("tag").textContent=F.tag; $("title").textContent=F.title;
+  // quick fields
+  let html="", buf=[];
+  const flush=()=>{if(buf.length){html+=buf.length===2?`<div class="row2">${buf.join("")}</div>`:buf.join("");buf=[]}};
+  F.quick.forEach(q=>{
+    const lab=`${esc(q.label)}${q.unit?` <small>(${esc(q.unit)})</small>`:""}`;
+    let inner;
+    if(q.type==="chips") inner=`<span class="lbl">${lab}</span><div class="chips" id="q_${q.k}"></div>`;
+    else if(q.type==="select") inner=`<label for="q_${q.k}">${lab}</label><select id="q_${q.k}"><option value="">Choisir</option>${q.opts.map(o=>`<option>${esc(o)}</option>`).join("")}</select>`;
+    else inner=`<label for="q_${q.k}">${lab}</label><input id="q_${q.k}" type="${q.type==="num"?"number":"text"}" inputmode="numeric" autocomplete="off">`;
+    const f=`<div class="field">${inner}</div>`;
+    if(q.half){buf.push(f);if(buf.length===2)flush()}else{flush();html+=f}
+  });
+  flush(); $("quickFields").innerHTML=html;
+  F.quick.forEach(q=>{
+    const saved=q.remember?store.get(k+"_"+q.k):null;
+    if(q.type==="chips") chips($("q_"+q.k),"q_"+q.k,q.opts,saved||q.def||"");
+    else $("q_"+q.k).value=saved||q.def||"";
+  });
+  // sections
+  const host=$("sections"); host.innerHTML="";
+  F.sections.forEach(sec=>{
+    const d=document.createElement("details");
+    let h=`<summary><h2>${sec.title}</h2><span class="status" id="st-${sec.key}"></span><span class="chev" aria-hidden="true"></span></summary><div class="body">`;
+    sec.groups.forEach(gr=>{
+      h+=`<div class="group">${gr.q?`<span class="q">${gr.q}</span>`:""}`;
+      gr.rows.forEach(([id,label])=>{h+=`<div class="item" id="it-${id}"><span class="lbl">${label}</span><div class="chips" data-id="${id}"></div></div>`});
+      h+=`</div>`;
+    });
+    if(sec.dysf) h+=`<div class="field group"><label for="df-${sec.key}">Nature des dysfonctionnements <small>(0 si aucun)</small></label><input id="df-${sec.key}" type="text" value="0"><div class="hint" id="dh-${sec.key}" hidden>Écart signalé dans cette section : décris-le ici.</div></div>`;
+    d.innerHTML=h+`</div>`; host.appendChild(d);
+    sec.groups.forEach(gr=>gr.rows.forEach(([id])=>chips(d.querySelector(`[data-id="${id}"]`),"e"+id,gr.opts,gr.opts[0])));
+  });
+  $("obs").value=""; $("obs-field").hidden=!F.obs;
+  chips($("nc"),"nc",F.ncOpts||["Non","Oui"],"Non"); $("nc-item").hidden=!F.nc;
+  $("menu").hidden=true; $("app").hidden=false; window.scrollTo(0,0);
+  update();
+}
+
+function update(){
+  if(!F)return;
+  const p=[]; const add=(id,v)=>{if(id&&v!==""&&v!=null)p.push("entry."+id+"="+encodeURIComponent(v))};
+  const missing=[];
+  F.quick.forEach(q=>{const v=qv(q); add(q.id,v); if(q.req&&!v)missing.push(q.label); if(q.remember&&v)store.set(FK+"_"+q.k,v);});
+  let total=0, needText=[];
+  F.sections.forEach(sec=>{
+    let n=0;
+    sec.groups.forEach(gr=>gr.rows.forEach(([id])=>{const v=val("e"+id); add(id,v); const bad=v!==gr.opts[0]; $("it-"+id).classList.toggle("flag",bad); if(bad)n++;}));
+    if(sec.dysf){const t=$("df-"+sec.key).value.trim()||"0"; add(sec.dysf,t); const m=n>0&&t==="0"; $("dh-"+sec.key).hidden=!m; if(m)needText.push(sec.title);}
+    const st=$("st-"+sec.key); st.textContent=n?`${n} écart${n>1?"s":""}`:"Conforme"; st.classList.toggle("bad",n>0); total+=n;
+  });
+  if(F.obs) add(F.obs,$("obs").value.trim());
+  if(F.nc){add(F.nc,val("nc")); const bad=val("nc")!=="Non"; $("nc-item").classList.toggle("flag",bad); $("nc-hint").hidden=!bad;}
+  const go=$("go"), msg=$("msg");
+  if(missing.length){go.setAttribute("aria-disabled","true"); go.href="#"; msg.className="miss"; msg.textContent="À remplir : "+missing.join(", ");}
+  else{go.removeAttribute("aria-disabled"); go.href=F.url+"&"+p.join("&");
+    msg.className=needText.length?"miss":"";
+    msg.textContent=needText.length?"Décris les écarts : "+needText.join(", "):(total?`${total} écart${total>1?"s":""} signalé${total>1?"s":""}. `:"Tout conforme. ")+"Ensuite : Suivant jusqu'à Envoyer.";}
+}
+document.addEventListener("input",update); document.addEventListener("change",update);
+$("go").addEventListener("click",e=>{if($("go").getAttribute("aria-disabled")==="true")e.preventDefault()});
+$("reset").addEventListener("click",()=>{
+  F.sections.forEach(sec=>{sec.groups.forEach(gr=>gr.rows.forEach(([id])=>{const r=document.querySelector(`input[name="e${id}"][value="${CSS.escape(gr.opts[0])}"]`); if(r)r.checked=true})); if(sec.dysf)$("df-"+sec.key).value="0";});
+  const n=document.querySelector('input[name="nc"][value="Non"]'); if(n)n.checked=true; update();
+});
+</script>
+</body></html>
